@@ -45,9 +45,7 @@ async def process_role_mapping_task(
     state_center_name: str,
     department_id: str | None,
     department_name: str | None,
-    sector_name: str | None,
-    instruction: str | None,
-    additional_document_contents: List[bytes] | None
+    instruction: str | None
 ):
     """
     Background task.
@@ -72,10 +70,8 @@ async def process_role_mapping_task(
                 org_type=org_type,
                 state_center_id=state_center_id,
                 state_center_name=state_center_name,
-                additional_document_contents=additional_document_contents,
                 department_name=department_name,
                 department_id=department_id,
-                sector=sector_name,
                 instruction=instruction
             )
         except Exception as e:
@@ -115,7 +111,6 @@ async def process_role_mapping_task(
                 department_id=department_id,
                 state_center_name=state_center_name,
                 department_name=department_name,
-                sector_name=sector_name,
                 instruction=instruction,
                 status=ProcessingStatus.COMPLETED, # Immediately valid
                 designation_name=data.get('designation_name'),
@@ -153,9 +148,7 @@ async def generate_role_mapping(
     department_id: Optional[str] = Form(None, description="ID of the associated department"),
     state_center_name: str = Form(..., description="Name of the associated state/center"),
     department_name: Optional[str] = Form(None, description="Name of the associated department"),
-    sector_name: Optional[str] = Form(None, max_length=255, description="Name of the sector"),
     instruction: Optional[str] = Form(None, description="Additional instructions for role mapping generation"),
-    additional_document: List[UploadFile] = File(None, description="Additional Document"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -194,11 +187,6 @@ async def generate_role_mapping(
                 logger.info("Found failed records. Cleaning up to retry...")
                 # Delete all records matching the filter to ensure a clean slate
                 await crud_role_mapping.delete_existing_mappings(db, state_center_id, current_user.user_id, department_id)
-
-        additional_document_contents = [
-            await document.read()
-            for document in additional_document
-        ] if additional_document else []
         
         # Create Placeholder Row (Locks the process and acts as the first record)
         placeholder = RoleMapping(
@@ -208,7 +196,6 @@ async def generate_role_mapping(
             department_id=department_id,
             state_center_name=state_center_name,
             department_name=department_name,
-            sector_name=sector_name,
             instruction=instruction,
             status=ProcessingStatus.IN_PROGRESS,
             # Dummy values for non-nullable fields
@@ -232,9 +219,7 @@ async def generate_role_mapping(
             state_center_name=state_center_name,
             department_id=department_id,
             department_name=department_name,
-            sector_name=sector_name,
-            instruction=instruction,
-            additional_document_contents=additional_document_contents
+            instruction=instruction
         )
 
         return {
@@ -276,7 +261,7 @@ async def generate_role_and_competencies(input_data):
                     "sub_theme": "[Competency Sub-theme]",
                 }
             ],
-            "source": "[ACBP, Work Allocation Order, KCM, AI Suggested]"
+            "source": "[Primary document summaries, KCM, AI Suggested]"
         }
         prompt = DESIGNATION_ROLE_MAPPING_PROMPT.format(
             organization_name=input_data.get('org_name'),
@@ -356,6 +341,7 @@ async def add_designation_to_role_mapping(
             generated = await generate_role_and_competencies(input_data)
             return RoleMapping(
                 user_id=current_user.user_id,
+                org_type=role_mapping.org_type,
                 state_center_id=request.state_center_id,
                 state_center_name=request.state_center_name,
                 department_id=request.department_id,

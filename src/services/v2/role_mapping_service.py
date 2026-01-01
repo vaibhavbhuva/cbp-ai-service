@@ -30,7 +30,7 @@ center_json_output = [{
       "source": "KCM or AI Suggested"
    }
   ],
-  "source": ["ACBP", "Work Allocation Order", "AI Suggested"]
+  "source": ["Primary document summaries", "AI Suggested"]
 }]
 
 state_json_output = [{
@@ -47,7 +47,7 @@ state_json_output = [{
       "source": "KCM or AI Suggested"
     }
   ],
-  "source": ["Work Allocation Order" or "ACBP" or "Additional supporting document" or "AI Suggested"]
+  "source": ["Work Allocation Order" or "ACBP" or "Primary document summaries" or "AI Suggested"]
 }]
 
 class RoleMappingService:
@@ -68,8 +68,7 @@ class RoleMappingService:
     
     async def _call_gemini(
         self, 
-        organization_data: Dict[str, Any],
-        additional_document_contents: List[bytes] | None
+        organization_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Call Google Gemini to generate role mapping
@@ -104,7 +103,6 @@ class RoleMappingService:
             base_prompt = PROMPT.format(
                 organization_name=organization_data.get('organization_name'),
                 department_name=organization_data.get('department_name'),
-                sector=organization_data.get('sector'),
                 instructions=organization_data.get('instruction'),
                 primary_summary=organization_data.get('docs_summary'),
                 kcm_competencies=json.dumps(COMPETENCY_MAPPING, indent=2),
@@ -118,14 +116,6 @@ class RoleMappingService:
                     parts=[types.Part.from_text(text=base_prompt)]
                 )
             ]
-
-            if additional_document_contents:
-                for document_bytes in additional_document_contents:
-                    pdf_part = types.Part.from_bytes(
-                                data=document_bytes,
-                                mime_type='application/pdf',
-                            )
-                    contents[0].parts.insert(0, pdf_part)
             
             # Configure the generation
             generate_content_config = types.GenerateContentConfig(
@@ -224,10 +214,8 @@ class RoleMappingService:
         org_type: OrgType,
         state_center_id: str,
         state_center_name: str,
-        additional_document_contents: List[bytes] | None,
         department_name: Optional[str] = None,
         department_id: Optional[str] = None,
-        sector: Optional[str] = None,
         instruction: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -239,7 +227,6 @@ class RoleMappingService:
             db (Session): SQLAlchemy database session.
             department_id (optional): ID of associated department. Defaults to None.
             department_name (optional): The name of associated department. Defaults to None.
-            sector (Optional[str], optional): The name of the sector. Defaults to None.
             instruction (Optional[str], optional): Additional instructions. Defaults to None.
 
             
@@ -265,12 +252,11 @@ class RoleMappingService:
                 "organization_name": state_center_name,
                 "department_name": department_name if department_name else "N/A",
                 "docs_summary": docs_summary if docs_summary else 'N/A',
-                "sector": sector if sector else "N/A",
                 "instruction": instruction if instruction else "N/A"
             }
             
             # Generate role mapping using thread pool for blocking call
-            result = await self._call_gemini(organization_data, additional_document_contents)
+            result = await self._call_gemini(organization_data)
 
             logger.info("Role mapping generation completed successfully")
             return result
