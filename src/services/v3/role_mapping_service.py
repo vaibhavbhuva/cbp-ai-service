@@ -5,6 +5,7 @@ import uuid
 import asyncio
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
 
 from ...schemas.role_mapping import OrgType
 from ...core.configs import settings
@@ -55,6 +56,19 @@ state_json_output = [{
     ],
     "source": ["Work Allocation Order", "ACBP", "Additional supporting document", "AI Suggested"]
 }]
+
+class Designation(BaseModel):
+    sort_order: int = Field(
+        description="Hierarchical position, starting from 1 (highest) and incrementing sequentially"
+    )
+    designation: str = Field(
+        description="The official designation or job title"
+    )
+
+class DesignationExtractionResponse(BaseModel):
+    designations: List[Designation] = Field(
+        description="Complete list of all extracted designations sorted by hierarchy"
+    )
 
 class RoleMappingService:
     """Service for generating role mappings using Google AI"""
@@ -114,6 +128,8 @@ class RoleMappingService:
             
             generate_content_config = types.GenerateContentConfig(
                 temperature=0.3,  # Lower temperature for extraction accuracy
+                response_mime_type="application/json",
+                response_schema=DesignationExtractionResponse.model_json_schema()
             )
             
             response = await self.client.aio.models.generate_content(
@@ -129,10 +145,10 @@ class RoleMappingService:
                 logger.error("Designation extraction response was empty")
                 raise Exception("Empty response from Gemini during designation extraction")
             
-            text_response = text_response.replace("```json", '').replace("```", '')
-            parsed_response = json.loads(text_response)
-            
-            return parsed_response
+            extraction_response = DesignationExtractionResponse.model_validate_json(text_response)
+            return {
+                "designations": [d.model_dump() for d in extraction_response.designations]
+            }
             
         except Exception as e:
             logger.exception(f"Error in designation extraction")
