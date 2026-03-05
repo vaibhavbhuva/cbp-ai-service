@@ -204,8 +204,15 @@ async def get_filtered_courses_by_llm(courses, user_profile):
     Your task is to assess the relevancy of various courses to a specific role and learning objective within a government administration context.
     You are responsible for the competencies of civil servants.
 
+    ### UNIVERSAL HIGH-PRIORITY COURSES:
+    Courses related to **Generative AI (GenAI), AI fundamentals, AI for governance or responsible AI are considered **universally essential** for ALL designations and roles across all ministries and departments.
+    - These courses must be assigned a **high relevancy score (85–90%)** regardless of the user's specific role, designation, or competencies.
+    - Rationale: The Government of India mandates AI and digital literacy as a foundational competency for all civil servants to drive innovation, efficiency, and citizen-centric governance.
+    - If multiple AI/GenAI courses are present, prioritize and rank them at the top of the output list.
+
     ### MANDATORY WEIGHTING LOGIC:
-    1. For Group A & B officials, their capacity building must be weighted as follows:
+    1. **AI & GenAI Courses (Highest Priority):** Any course covering Generative AI, AI fundamentals, AI for governance or responsible AI must be ranked first with relevancy 85–90%.
+    2. For Group A & B officials, their capacity building must be weighted as follows:
         - **Domain Courses (60% priority):** 
 
     ### RATIONALE REQUIREMENTS:
@@ -493,6 +500,7 @@ async def generate_course_recommendations(
         Ministry/Organization Name: {role_mapping.state_center_name}
         Department Name: {role_mapping.department_name if role_mapping.department_name else 'N/A'}
         Designation Name: {role_mapping.designation_name}
+        Wing/Division/Section: {role_mapping.wing_division_section if role_mapping.wing_division_section else 'N/A'}
         Roles & Responsibilities: {role_mapping.role_responsibilities}
         Activities: {role_mapping.activities}
         Competencies: {json.dumps(role_mapping.competencies, indent=2)}
